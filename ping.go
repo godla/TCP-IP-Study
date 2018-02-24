@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	// "runtime"
-	// "sync"
+	"sync"
 	//"testing"
 	"time"
 
@@ -28,16 +31,24 @@ func main() {
 		fmt.Println(m)
 		return
 	} else {
-		fmt.Println(m, ok)
+		//fmt.Println(m, ok)
 	}
-
-	for i, tt := range privilegedPingTests {
-		fmt.Println(i, tt)
-		if err := doPing(tt, i); err != nil {
-			fmt.Println(err)
-			return
-		}
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func(i int) {
+			defer wg.Done()
+			time.Sleep(time.Duration(i) * time.Second)
+			for i2, tt := range privilegedPingTests {
+				//fmt.Println(i, tt)
+				if err := doPing(tt, i2); err != nil {
+					fmt.Println(err)
+					return
+				}
+			}
+		}(i)
 	}
+	wg.Wait()
 
 }
 
@@ -47,7 +58,7 @@ func googleAddr(c *icmp.PacketConn, protocol int) (net.Addr, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(ips)
+	//fmt.Println(ips)
 
 	netaddr := func(ip net.IP) (net.Addr, error) {
 		switch c.LocalAddr().(type) {
@@ -63,8 +74,8 @@ func googleAddr(c *icmp.PacketConn, protocol int) (net.Addr, error) {
 	for _, ip := range ips {
 		switch protocol {
 		case iana.ProtocolICMP:
-			fmt.Println("ICMP")
-			fmt.Println(ip.To4())
+			//fmt.Println("ICMP")
+			//fmt.Println(ip.To4())
 			//os.Exit(1)
 			if ip.To4() != nil {
 				return netaddr(ip)
@@ -90,6 +101,11 @@ var privilegedPingTests = []pingTest{
 	//{"ip6:ipv6-icmp", "::", iana.ProtocolIPv6ICMP, ipv6.ICMPTypeEchoRequest},
 }
 
+func Round(f float64, n int) float64 {
+	n10 := math.Pow10(n)
+	return math.Trunc((f+0.5/n10)*n10) / n10
+}
+
 func doPing(tt pingTest, seq int) error {
 	//net.ListenPacket(network, address)
 	c, err := icmp.ListenPacket(tt.network, tt.address)
@@ -102,7 +118,7 @@ func doPing(tt pingTest, seq int) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(dst)
+	//fmt.Println(dst)
 
 	// if tt.network != "udp6" && tt.protocol == iana.ProtocolIPv6ICMP {
 	// 	var f ipv6.ICMPFilter
@@ -116,12 +132,19 @@ func doPing(tt pingTest, seq int) error {
 	// 		return err
 	// 	}
 	// }
+	now := time.Now()
+	ns := now.UnixNano()
+
+	nsb := bytes.NewBuffer([]byte{})
+	binary.Write(nsb, binary.BigEndian, ns)
+
+	//fmt.Println(ns, nsb.Bytes())
 
 	wm := icmp.Message{
 		Type: tt.mtype, Code: 0,
 		Body: &icmp.Echo{
 			ID: os.Getpid() & 0xffff, Seq: 1 << uint(seq),
-			Data: []byte("HELLO-R-U-THERE"),
+			Data: nsb.Bytes(),
 		},
 	}
 
@@ -130,7 +153,7 @@ func doPing(tt pingTest, seq int) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(wm.Body)
+	//fmt.Println(wm.Body)
 	if n, err := c.WriteTo(wb, dst); err != nil {
 		return err
 	} else if n != len(wb) {
@@ -146,17 +169,30 @@ func doPing(tt pingTest, seq int) error {
 	if err != nil {
 		return err
 	}
+	//fmt.Println(rb)
 
 	rm, err := icmp.ParseMessage(tt.protocol, rb[:n])
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("read from %v\n", peer)
+	//fmt.Printf("read from %v\n", peer)
 	//获取我们发送出去的数据 在这里可以写入时间来计算往返时间
 	dd, err := rm.Body.Marshal(iana.ProtocolICMP)
+
+	var timens int64
+	recvdata := dd[4:]
+	recvnsb := bytes.NewBuffer(recvdata)
+	binary.Read(recvnsb, binary.BigEndian, &timens)
+	//fmt.Println(timens)
+	nowc := time.Now()
+	ctime := nowc.UnixNano()
+	var cc float64
+	cc = float64(ctime-timens) / float64(1e6)
+	fmt.Printf("ping %v times:%v ms\n", peer, Round(cc, 2))
+
 	//fmt.Println(icmp.Echo(rm.Body))
-	fmt.Printf("%s\n", dd[4:])
+	//fmt.Printf("%s\n", dd[4:])
 	/**
 	* 或者使用unsafe 转换
 	*	t := T {
