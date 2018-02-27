@@ -35,7 +35,7 @@ func main() {
 	}
 	var wg sync.WaitGroup
 	wg.Add(5)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1; i++ {
 		go func(i int) {
 			defer wg.Done()
 			time.Sleep(time.Duration(i) * time.Second)
@@ -153,6 +153,7 @@ func doPing(tt pingTest, seq int) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("%v", c)
 	//fmt.Println(wm.Body)
 	if n, err := c.WriteTo(wb, dst); err != nil {
 		return err
@@ -169,7 +170,7 @@ func doPing(tt pingTest, seq int) error {
 	if err != nil {
 		return err
 	}
-	//fmt.Println(rb)
+	fmt.Println(rb)
 
 	rm, err := icmp.ParseMessage(tt.protocol, rb[:n])
 	if err != nil {
