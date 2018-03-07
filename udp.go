@@ -8,7 +8,7 @@ import (
 /**
 UDP是无链接！ UDP是无链接！ UDP是无链接！
 
-DialUDP 是 pre-connected
+DialUDP 是 pre-connected 其实是维持了一个发送地址
 ListenUDP 是 unconnect
 
 如果*UDPConn是connected,读写方法是Read和Write。
