@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 /**
@@ -39,6 +40,8 @@ func (man *Man) hello() {
 	fmt.Println(man.name)
 }
 
+var workerChan = make(chan *net.TCPConn, 10000)
+
 func main() {
 
 	// vman := Man{
@@ -72,11 +75,49 @@ func server() {
 	if lerr != nil {
 		os.Exit(2)
 	}
+
+	//plan2 code start
+	for i := 0; i < 10; i++ {
+		go sworker2(workerChan)
+	}
+
+	st := time.Now()
+	var cn int
+	cn = 0
+	//plan2 code end
 	for {
+
 		tcpConn, cerr := listen.AcceptTCP()
 		if cerr == nil {
-			go sworker(tcpConn)
+			cn++
+			//go sworker(tcpConn) //plan 1
+			workerChan <- tcpConn //plan 2 减少了工作协程创建
 		}
+		if time.Since(st).Seconds() >= 2 {
+			fmt.Println("accept tcp client :", cn)
+			cn = 0
+			st = time.Now()
+		}
+	}
+}
+
+/**
+ * 通过chan，的工作线程
+ */
+func sworker2(conns <-chan *net.TCPConn) {
+	fmt.Println("sworker2")
+	var b [1500]byte
+	for conn := range conns {
+		//for {
+		_, err := conn.Read(b[0:])
+
+		if err == nil {
+			//fmt.Println(string(b[0:len]))
+		}
+
+		conn.Write([]byte("HELLO WORLD"))
+		//conn.Close()
+		//}
 	}
 }
 
@@ -98,22 +139,37 @@ func sworker(conn *net.TCPConn) {
 }
 
 func client() {
-	raddr, rerr := net.ResolveTCPAddr("tcp", "127.0.0.1:999")
-	if rerr != nil {
-		os.Exit(3)
+	//linux 默认文件数打开1024
+	//ulimit -n 20000 修改
+	for i := 0; i < 40000; i++ {
+		fmt.Println("create clint", i)
+		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					fmt.Println(err)
+				}
+			}()
+			raddr, rerr := net.ResolveTCPAddr("tcp", "127.0.0.1:999")
+			if rerr != nil {
+				fmt.Println(rerr)
+				os.Exit(3)
+			}
+			tcpConn, dterr := net.DialTCP("tcp", nil, raddr)
+
+			if dterr != nil {
+				fmt.Println(dterr)
+				os.Exit(4)
+			}
+
+			var b [1500]byte
+
+			wlen, err := tcpConn.Write([]byte("ARE-U-THERE"))
+			if err == nil && wlen > 0 {
+				rlen, _ := tcpConn.Read(b[0:])
+				fmt.Println(string(b[0:rlen]))
+			} else {
+				fmt.Println(err)
+			}
+		}()
 	}
-	tcpConn, dterr := net.DialTCP("tcp", nil, raddr)
-
-	if dterr != nil {
-		os.Exit(4)
-	}
-
-	var b [1500]byte
-
-	wlen, err := tcpConn.Write([]byte("ARE-U-THERE"))
-	if err == nil && wlen > 0 {
-		rlen, _ := tcpConn.Read(b[0:])
-		fmt.Println(string(b[0:rlen]))
-	}
-
 }
