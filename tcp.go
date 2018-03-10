@@ -41,6 +41,7 @@ func (man *Man) hello() {
 }
 
 var workerChan = make(chan *net.TCPConn, 10000)
+var graddr *string
 
 func main() {
 
@@ -53,6 +54,7 @@ func main() {
 	// fmt.Println(vman)
 
 	nf := flag.String("name", "server", "input server or client")
+	graddr = flag.String("ip", "127.0.0.1:999", "ip:port")
 	flag.Parse()
 	fmt.Println(*nf)
 	if *nf == "server" {
@@ -149,7 +151,7 @@ func client() {
 					fmt.Println(err)
 				}
 			}()
-			raddr, rerr := net.ResolveTCPAddr("tcp", "127.0.0.1:999")
+			raddr, rerr := net.ResolveTCPAddr("tcp", *graddr)
 			if rerr != nil {
 				fmt.Println(rerr)
 				os.Exit(3)
